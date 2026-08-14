@@ -32,13 +32,13 @@ RootNavigator
 | **SignupScreen** | **LIVE** | Supabase | Creates new profile records in Supabase |
 | **FarmerHomeScreen** | **LIVE** | Groq & Supabase | Real Groq LLaMA text/voice parser + direct database inserts |
 | **FarmerOrdersScreen**| **LIVE** | Supabase | Real-time query of logged-in farmer's active and historical orders |
-| **FarmerOffersScreen**| *MOCKED* | Local state / Mock arrays | Displays bidding offers received for orders |
+| **FarmerOffersScreen**| **LIVE** | Supabase (Realtime) | Subscribes to live incoming driver bids and processes acceptance transactions |
 | **FarmerProfileScreen**| **LIVE** | Supabase | Changes user language preferences dynamically in the remote DB |
-| **DriverFeedScreen** | *MOCKED* | Mock array `MOCK_TRIPS` | Shows bundled trip offers eligible to bid on |
-| **DriverTripsScreen** | *MOCKED* | Mock active trip stop sequences | Interactive sequence confirmations for load pick-up |
+| **DriverFeedScreen** | **LIVE** | Supabase | Pulls live orders and runs matching checks. Places real bids on Supabase |
+| **DriverTripsScreen** | **LIVE** | Supabase | Shows assigned bookings. Mark pickup and delivery updates order state |
 | **DriverEarningsScreen**| *MOCKED* | Static data arrays | Historical earnings and Shapley split valuations |
 | **DriverProfileScreen**| *MOCKED* | Local state | Driver availability toggle and vehicle capacity display |
-| **AdminDashboardScreen**| *MOCKED* | Static counts | Stat counters (Active drivers, today's revenue) and review cards |
+| **AdminDashboardScreen**| **LIVE** | Supabase | Calculates dynamic system statistics directly from database queries |
 | **AdminOrdersScreen** | **LIVE** | Supabase | Queries orders + triggers remote state, price, or driver overrides |
 | **AdminDriversScreen** | *MOCKED* | Static lists | Directory of registered drivers and vehicle loads |
 | **AdminFarmersScreen** | *MOCKED* | Static lists | Directory of registered farmers and orders |
