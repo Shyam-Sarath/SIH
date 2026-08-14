@@ -50,7 +50,7 @@ Return ONLY a valid JSON object matching this schema. Do not return markdown, do
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama3-8b-8192',
+        model: 'llama-3.1-8b-instant',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Please extract order details from this transcript: "${rawText}"` },
