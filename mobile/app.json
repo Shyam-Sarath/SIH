@@ -7,18 +7,13 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0F0D",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0F0D"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.krishibundle.app"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0A0F0D"
       },
       "package": "com.krishibundle.app",
@@ -33,7 +28,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-localization"
+      "expo-localization",
+      "expo-font"
     ],
     "extra": {
       "eas": {
