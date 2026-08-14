@@ -1,52 +1,52 @@
-// Driver Trips Feed — eligible bundled trips to bid on
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Alert } from 'react-native';
+// Driver Trips Feed — live matching engine to bid on real orders
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '../../theme';
-
-const MOCK_TRIPS = [
-  {
-    id: 'bundle-001',
-    pickups: 3,
-    totalQuantity: 95,
-    crops: ['Tomato 25kg', 'Onion 30kg', 'Carrot 40kg'],
-    pickupArea: 'Kurichi → Vadavalli → Saravanampatty',
-    destination: 'Koyambedu Market, Chennai',
-    distanceKm: 32,
-    fairPriceMin: 360,
-    fairPriceMax: 420,
-    capacityFit: 68,
-    compatibilityScore: 94,
-    compatibilityNote: '✅ All crops are compatible. Onion & tomato safe together at room temp.',
-    timeWindow: '5:00 AM – 8:00 AM tomorrow',
-  },
-  {
-    id: 'bundle-002',
-    pickups: 2,
-    totalQuantity: 70,
-    crops: ['Banana 40kg', 'Mango 30kg'],
-    pickupArea: 'Mettupalayam → Periyanaickenpalayam',
-    destination: 'Erode Market',
-    distanceKm: 21,
-    fairPriceMin: 280,
-    fairPriceMax: 340,
-    capacityFit: 45,
-    compatibilityScore: 88,
-    compatibilityNote: '⚠️ Mango emits ethylene. Stored separately in vehicle. Compatible.',
-    timeWindow: '4:00 AM – 7:00 AM tomorrow',
-  },
-];
+import { fetchEligibleOrdersForDriver, placeDriverBid } from '../../services/dbService';
+import { useAuth } from '../../store/AuthContext';
+import { checkCompatibility } from '../../utils/compatibilityEngine';
 
 export default function DriverFeedScreen() {
+  const { userName, userPhone } = useAuth();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [bids, setBids] = useState<Record<string, string>>({});
   const [submittedBids, setSubmittedBids] = useState<Set<string>>(new Set());
 
-  const handleBid = (bundleId: string) => {
-    const bidAmount = bids[bundleId];
+  // Hardcoded driver profile representation for the matching calculations
+  const driverSnapshot = {
+    id: userPhone || '9876541111',
+    vehicleCapacityKg: 1000,
+    currentLoadKg: 200,
+    locationLat: 11.0168, // Coimbatore coordinates
+    locationLng: 76.9558,
+    isAvailable: true,
+  };
+
+  useEffect(() => {
+    loadEligibleOrders();
+  }, [userPhone]);
+
+  const loadEligibleOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchEligibleOrdersForDriver(driverSnapshot);
+      setOrders(data || []);
+    } catch (e) {
+      console.warn('Failed to load driver matching feed:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBid = (orderId: string, fairPriceMin = 360) => {
+    const bidAmount = bids[orderId];
     if (!bidAmount || isNaN(Number(bidAmount))) {
       Alert.alert('Invalid', 'Enter a valid bid amount');
       return;
     }
+
     Alert.alert(
       '🤝 Place Bid?',
       `Your bid: ₹${bidAmount}\nSystem will notify you if the farmer accepts.`,
@@ -54,9 +54,25 @@ export default function DriverFeedScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm Bid',
-          onPress: () => {
-            setSubmittedBids(s => new Set([...s, bundleId]));
-            Alert.alert('✅ Bid Placed!', 'The farmer will review your offer shortly.');
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await placeDriverBid({
+                orderId,
+                driverPhone: userPhone || '9876541111',
+                driverName: userName || 'Driver Suresh',
+                vehicleType: 'Tata Ace (1 Ton)',
+                amount: Number(bidAmount),
+                reliability: 96,
+              });
+              setSubmittedBids(s => new Set([...s, orderId]));
+              Alert.alert('✅ Bid Placed!', 'The farmer will review your offer shortly.');
+            } catch (err) {
+              Alert.alert('Error', 'Failed to place bid.');
+            } finally {
+              setLoading(false);
+              loadEligibleOrders();
+            }
           },
         },
       ]
@@ -70,106 +86,120 @@ export default function DriverFeedScreen() {
         <Text style={styles.headerTitle}>🚚 Trips Feed</Text>
         <View style={styles.availableBadge}>
           <View style={styles.dot} />
-          <Text style={styles.availableText}>Available</Text>
+          <Text style={styles.availableText}>Active Load: {driverSnapshot.currentLoadKg}/1000 kg</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>
-          {MOCK_TRIPS.length} bundled trips match your vehicle capacity and route
+          {orders.length} real orders match your Tata Ace capacity and deviation limits
         </Text>
 
-        {MOCK_TRIPS.map(trip => (
-          <View key={trip.id} style={styles.tripCard}>
-            {/* Route */}
-            <View style={styles.routeHeader}>
-              <View style={styles.routeInfo}>
-                <Ionicons name="location" size={16} color={Colors.farmerColor} />
-                <Text style={styles.routeText}>{trip.pickupArea}</Text>
-              </View>
-              <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
-              <View style={styles.routeInfo}>
-                <Ionicons name="storefront" size={16} color={Colors.accent} />
-                <Text style={styles.destText}>{trip.destination}</Text>
-              </View>
-            </View>
+        {loading && orders.length === 0 ? (
+          <ActivityIndicator size="large" color={Colors.driverColor} style={{ marginTop: 40 }} />
+        ) : orders.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="location-outline" size={48} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>No matched orders nearby</Text>
+            <Text style={styles.emptySub}>We will notify you when new crops are listed within 15 km.</Text>
+          </View>
+        ) : (
+          orders.map(order => {
+            const compat = checkCompatibility(order.crop, 'onion', 3); // check compatibility with current load crop
+            const progress = (order.quantity / (1000 - driverSnapshot.currentLoadKg)) * 100;
+            const deviationKm = 4.2; // Simulated matching radius calculation
+            const fairPriceMin = 360;
+            const fairPriceMax = 420;
 
-            {/* Stats row */}
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statVal}>{trip.pickups}</Text>
-                <Text style={styles.statLbl}>Pickups</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statVal}>{trip.totalQuantity} kg</Text>
-                <Text style={styles.statLbl}>Total Load</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statVal}>{trip.distanceKm} km</Text>
-                <Text style={styles.statLbl}>Distance</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={[styles.statVal, { color: Colors.driverColor }]}>{trip.capacityFit}%</Text>
-                <Text style={styles.statLbl}>Capacity</Text>
-              </View>
-            </View>
-
-            {/* Crops */}
-            <View style={styles.cropsBox}>
-              {trip.crops.map((c, i) => (
-                <View key={i} style={styles.cropChip}>
-                  <Text style={styles.cropChipText}>🌿 {c}</Text>
+            return (
+              <View key={order.id} style={styles.tripCard}>
+                {/* Route */}
+                <View style={styles.routeHeader}>
+                  <View style={styles.routeInfo}>
+                    <Ionicons name="location" size={16} color={Colors.farmerColor} />
+                    <Text style={styles.routeText}>Coimbatore (Farmer {order.farmer_name})</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
+                  <View style={styles.routeInfo}>
+                    <Ionicons name="storefront" size={16} color={Colors.accent} />
+                    <Text style={styles.destText}>{order.destination}</Text>
+                  </View>
                 </View>
-              ))}
-            </View>
 
-            {/* Compatibility */}
-            <View style={styles.compatBox}>
-              <View style={styles.compatHeader}>
-                <Text style={styles.compatTitle}>Cargo Compatibility</Text>
-                <View style={[styles.compatBadge, { backgroundColor: trip.compatibilityScore >= 90 ? Colors.success + '25' : Colors.warning + '25' }]}>
-                  <Text style={[styles.compatScore, { color: trip.compatibilityScore >= 90 ? Colors.success : Colors.warning }]}>
-                    {trip.compatibilityScore}%
+                {/* Stats row */}
+                <View style={styles.statsRow}>
+                  <View style={styles.stat}>
+                    <Text style={styles.statVal}>{order.quantity} kg</Text>
+                    <Text style={styles.statLbl}>Load</Text>
+                  </View>
+                  <View style={styles.stat}>
+                    <Text style={styles.statVal}>{deviationKm} km</Text>
+                    <Text style={styles.statLbl}>Deviation</Text>
+                  </View>
+                  <View style={styles.stat}>
+                    <Text style={[styles.statVal, { color: Colors.driverColor }]}>{Math.round(progress)}%</Text>
+                    <Text style={styles.statLbl}>Vol. Space</Text>
+                  </View>
+                </View>
+
+                {/* Crops */}
+                <View style={styles.cropsBox}>
+                  <View style={styles.cropChip}>
+                    <Text style={styles.cropChipText}>🌿 {order.crop} {order.quantity} kg</Text>
+                  </View>
+                </View>
+
+                {/* Compatibility Warning (Rules-first calculation) */}
+                <View style={styles.compatBox}>
+                  <View style={styles.compatHeader}>
+                    <Text style={styles.compatTitle}>Cargo Compatibility</Text>
+                    <View style={[styles.compatBadge, { backgroundColor: compat.compatible ? Colors.success + '25' : Colors.error + '25' }]}>
+                      <Text style={[styles.compatScore, { color: compat.compatible ? Colors.success : Colors.error }]}>
+                        {compat.compatible ? 'Safe' : 'Conflict'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.compatNote}>
+                    {compat.compatible 
+                      ? `✅ Matches vehicle profile temp limits.` 
+                      : `❌ Ethylene/Temp conflict: ${compat.reasons.join(', ')}`}
                   </Text>
                 </View>
-              </View>
-              <Text style={styles.compatNote}>{trip.compatibilityNote}</Text>
-            </View>
 
-            {/* Fair price */}
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Fair Price Band</Text>
-              <Text style={styles.priceValue}>₹{trip.fairPriceMin} – ₹{trip.fairPriceMax}</Text>
-            </View>
-
-            <Text style={styles.timeWindow}>⏰ {trip.timeWindow}</Text>
-
-            {/* Bid input */}
-            {submittedBids.has(trip.id) ? (
-              <View style={styles.bidSubmitted}>
-                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                <Text style={styles.bidSubmittedText}>Bid placed: ₹{bids[trip.id]}</Text>
-              </View>
-            ) : (
-              <View style={styles.bidRow}>
-                <View style={styles.bidInput}>
-                  <Text style={styles.rupeeSign}>₹</Text>
-                  <TextInput
-                    style={styles.bidTextInput}
-                    value={bids[trip.id] || ''}
-                    onChangeText={v => setBids(b => ({ ...b, [trip.id]: v }))}
-                    keyboardType="numeric"
-                    placeholder={`${trip.fairPriceMin} – ${trip.fairPriceMax}`}
-                    placeholderTextColor={Colors.textMuted}
-                  />
+                {/* Fair price */}
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Suggested Bid Range</Text>
+                  <Text style={styles.priceValue}>₹{fairPriceMin} – ₹{fairPriceMax}</Text>
                 </View>
-                <TouchableOpacity style={styles.bidBtn} onPress={() => handleBid(trip.id)}>
-                  <Text style={styles.bidBtnText}>Place Bid</Text>
-                </TouchableOpacity>
+
+                {/* Bid input */}
+                {submittedBids.has(order.id) ? (
+                  <View style={styles.bidSubmitted}>
+                    <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                    <Text style={styles.bidSubmittedText}>Bid Placed: ₹{bids[order.id]}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.bidRow}>
+                    <View style={styles.bidInput}>
+                      <Text style={styles.rupeeSign}>₹</Text>
+                      <TextInput
+                        style={styles.bidTextInput}
+                        value={bids[order.id] || ''}
+                        onChangeText={v => setBids(b => ({ ...b, [order.id]: v }))}
+                        keyboardType="numeric"
+                        placeholder={`${fairPriceMin} – ${fairPriceMax}`}
+                        placeholderTextColor={Colors.textMuted}
+                      />
+                    </View>
+                    <TouchableOpacity style={styles.bidBtn} onPress={() => handleBid(order.id, fairPriceMin)}>
+                      <Text style={styles.bidBtnText}>Bid</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
-        ))}
+            );
+          })
+        )}
       </ScrollView>
     </View>
   );
@@ -183,11 +213,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder,
   },
   headerTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  availableBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.success + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.success + '40' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
-  availableText: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.bold },
+  availableBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.driverColor + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full, borderWidth: 1, borderColor: Colors.driverColor + '40' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.driverColor },
+  availableText: { fontSize: FontSize.xs, color: Colors.driverColor, fontWeight: FontWeight.bold },
   scroll: { padding: Spacing.lg, paddingBottom: 100 },
   subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 10 },
+  emptyText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textSecondary },
+  emptySub: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center' },
   tripCard: {
     backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.lg,
     padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder,
@@ -213,7 +246,6 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   priceLabel: { fontSize: FontSize.sm, color: Colors.textMuted },
   priceValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.accent },
-  timeWindow: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.md },
   bidRow: { flexDirection: 'row', gap: Spacing.md, alignItems: 'center' },
   bidInput: {
     flex: 1, flexDirection: 'row', alignItems: 'center',

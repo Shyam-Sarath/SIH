@@ -1,67 +1,77 @@
-// Farmer Offers Screen — Accept/Reject incoming fare offers
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
+// Farmer Offers Screen — Accept/Reject incoming fare offers in real-time
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '../../theme';
-
-const MOCK_OFFERS = [
-  {
-    id: 'offer-001',
-    orderId: 'KB1024',
-    crop: 'Tomato',
-    quantity: 25,
-    vehicleType: 'Tata Ace',
-    capacity: '1 Ton',
-    fare: 380,
-    recommendedFare: 390,
-    estimatedPickup: 'Tomorrow, 6:30 AM',
-    driverRating: 4.7,
-    totalTrips: 48,
-    reliabilityScore: 92,
-    bundledWith: ['Onion 30kg (Farmer Suresh)', 'Carrot 15kg (Farmer Meena)'],
-    explanation: 'Price includes route deviation of 4.2km from driver\'s original route',
-  },
-  {
-    id: 'offer-002',
-    orderId: 'KB1024',
-    crop: 'Tomato',
-    quantity: 25,
-    vehicleType: 'Ashok Leyland Dost',
-    capacity: '1.5 Ton',
-    fare: 420,
-    recommendedFare: 390,
-    estimatedPickup: 'Tomorrow, 8:00 AM',
-    driverRating: 4.9,
-    totalTrips: 124,
-    reliabilityScore: 97,
-    bundledWith: ['Onion 30kg (Farmer Suresh)'],
-    explanation: 'Slightly higher fare due to larger, more reliable vehicle',
-  },
-];
+import { fetchBidsForOrder, acceptBidTransaction, subscribeToBids } from '../../services/dbService';
 
 export default function FarmerOffersScreen() {
+  const [bids, setBids] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [acceptedId, setAcceptedId] = useState<string | null>(null);
+  
+  // We use the last created order (or fallback order KB1028) for the offers view
+  const orderId = 'KB1028'; 
 
-  const handleAccept = (offer: typeof MOCK_OFFERS[0]) => {
+  useEffect(() => {
+    loadBids();
+
+    // Set up Supabase Realtime listener to automatically load new bids
+    const subscription = subscribeToBids(orderId, (newBid) => {
+      setBids((prev) => {
+        // Prevent duplicate push events
+        if (prev.some(b => b.id === newBid.id)) return prev;
+        return [...prev, newBid];
+      });
+      Alert.alert('🚚 New Bid Offer!', `New offer for ₹${newBid.amount} received from ${newBid.driver_name}!`);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const loadBids = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchBidsForOrder(orderId);
+      setBids(data || []);
+    } catch (e) {
+      console.warn('Failed to load bids:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccept = (bid: any) => {
     Alert.alert(
       '✅ Accept Offer?',
-      `Fare: ₹${offer.fare}\nVehicle: ${offer.vehicleType}\nPickup: ${offer.estimatedPickup}`,
+      `Fare: ₹${bid.amount}\nDriver: ${bid.driver_name}\nVehicle: ${bid.vehicle_type || 'Tata Ace'}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Accept',
+          text: 'Accept & Book',
           style: 'default',
-          onPress: () => {
-            setAcceptedId(offer.id);
-            Alert.alert('🎉 Order Confirmed!', 'Driver has been assigned. You will receive contact details shortly.');
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await acceptBidTransaction(orderId, bid.id, bid.driver_phone, bid.amount);
+              setAcceptedId(bid.id);
+              Alert.alert('🎉 Order Booked!', 'Driver has been assigned. You will receive contact details shortly.');
+            } catch (err) {
+              Alert.alert('Error', 'Failed to confirm booking.');
+            } finally {
+              setLoading(false);
+              loadBids();
+            }
           },
         },
       ]
     );
   };
 
-  const handleReject = (offerId: string) => {
-    Alert.alert('Offer Rejected', 'We will look for better options for you.');
+  const handleReject = (bidId: string) => {
+    Alert.alert('Offer Rejected', 'Bid has been declined.');
   };
 
   return (
@@ -69,7 +79,7 @@ export default function FarmerOffersScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>🔔 Offers</Text>
-        <Text style={styles.headerSub}>{MOCK_OFFERS.length} offers for Order #KB1024</Text>
+        <Text style={styles.headerSub}>{bids.length} offers for Order #{orderId}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -82,89 +92,86 @@ export default function FarmerOffersScreen() {
           </Text>
         </View>
 
-        {MOCK_OFFERS.map(offer => (
-          <View
-            key={offer.id}
-            style={[styles.offerCard, acceptedId === offer.id && styles.offerCardAccepted]}
-          >
-            {/* Vehicle + Rating header */}
-            <View style={styles.offerTop}>
-              <View style={styles.vehicleInfo}>
-                <Text style={styles.vehicleEmoji}>🚚</Text>
-                <View>
-                  <Text style={styles.vehicleType}>{offer.vehicleType}</Text>
-                  <Text style={styles.vehicleCapacity}>Capacity: {offer.capacity}</Text>
-                </View>
-              </View>
-              <View style={styles.ratingContainer}>
-                <Text style={styles.ratingValue}>⭐ {offer.driverRating}</Text>
-                <Text style={styles.ratingTrips}>{offer.totalTrips} trips</Text>
-              </View>
-            </View>
-
-            {/* Reliability bar */}
-            <View style={styles.reliabilityRow}>
-              <Text style={styles.reliabilityLabel}>Reliability</Text>
-              <View style={styles.reliabilityBar}>
-                <View style={[styles.reliabilityFill, { width: `${offer.reliabilityScore}%` }]} />
-              </View>
-              <Text style={styles.reliabilityScore}>{offer.reliabilityScore}%</Text>
-            </View>
-
-            {/* Bundled with */}
-            <View style={styles.bundleBox}>
-              <Text style={styles.bundleTitle}>📦 Bundled with your shipment:</Text>
-              {offer.bundledWith.map((b, i) => (
-                <Text key={i} style={styles.bundleItem}>• {b}</Text>
-              ))}
-            </View>
-
-            {/* Fare */}
-            <View style={styles.fareRow}>
-              <View>
-                <Text style={styles.fareLabel}>Your Fare</Text>
-                <Text style={styles.fareValue}>₹{offer.fare}</Text>
-                {offer.fare > offer.recommendedFare && (
-                  <Text style={styles.fareWarning}>↑ Above recommended (₹{offer.recommendedFare})</Text>
-                )}
-                {offer.fare <= offer.recommendedFare && (
-                  <Text style={styles.fareGood}>✓ Within fair range</Text>
-                )}
-              </View>
-              <View>
-                <Text style={styles.etaLabel}>Est. Pickup</Text>
-                <Text style={styles.etaValue}>{offer.estimatedPickup}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.explanation}>💡 {offer.explanation}</Text>
-
-            {/* Actions */}
-            {acceptedId === offer.id ? (
-              <View style={styles.acceptedBanner}>
-                <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                <Text style={styles.acceptedText}>Order Confirmed!</Text>
-              </View>
-            ) : (
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={styles.rejectBtn}
-                  onPress={() => handleReject(offer.id)}
-                  disabled={!!acceptedId}
-                >
-                  <Text style={styles.rejectBtnText}>✗ Reject</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.acceptBtn, !!acceptedId && { opacity: 0.4 }]}
-                  onPress={() => handleAccept(offer)}
-                  disabled={!!acceptedId}
-                >
-                  <Text style={styles.acceptBtnText}>✓ Accept — ₹{offer.fare}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+        {loading && bids.length === 0 ? (
+          <ActivityIndicator size="large" color={Colors.farmerColor} style={{ marginTop: 40 }} />
+        ) : bids.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="hourglass-outline" size={48} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>Waiting for driver bids...</Text>
+            <Text style={styles.emptySub}>Eligible drivers nearby have been notified.</Text>
           </View>
-        ))}
+        ) : (
+          bids.map(bid => {
+            const isAccepted = bid.status === 'ACCEPTED' || acceptedId === bid.id;
+            return (
+              <View
+                key={bid.id}
+                style={[styles.offerCard, isAccepted && styles.offerCardAccepted]}
+              >
+                {/* Vehicle + Rating header */}
+                <View style={styles.offerTop}>
+                  <View style={styles.vehicleInfo}>
+                    <Text style={styles.vehicleEmoji}>🚚</Text>
+                    <View>
+                      <Text style={styles.driverName}>{bid.driver_name}</Text>
+                      <Text style={styles.vehicleType}>{bid.vehicle_type || 'Tata Ace'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.ratingContainer}>
+                    <Text style={styles.ratingValue}>⭐ {bid.reliability ? (bid.reliability/20).toFixed(1) : '4.7'}</Text>
+                    <Text style={styles.ratingTrips}>Reliability: {bid.reliability || 95}%</Text>
+                  </View>
+                </View>
+
+                {/* Fare */}
+                <View style={styles.fareRow}>
+                  <View>
+                    <Text style={styles.fareLabel}>Your Fare</Text>
+                    <Text style={styles.fareValue}>₹{bid.amount}</Text>
+                    {bid.amount > 420 ? (
+                      <Text style={styles.fareWarning}>↑ Above recommended (₹420)</Text>
+                    ) : (
+                      <Text style={styles.fareGood}>✓ Within fair range</Text>
+                    )}
+                  </View>
+                  <View>
+                    <Text style={styles.etaLabel}>Est. Pickup</Text>
+                    <Text style={styles.etaValue}>Tomorrow Morning</Text>
+                  </View>
+                </View>
+
+                {/* Actions */}
+                {isAccepted ? (
+                  <View style={styles.acceptedBanner}>
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                    <Text style={styles.acceptedText}>Order Booked!</Text>
+                  </View>
+                ) : bid.status === 'REJECTED' ? (
+                  <View style={[styles.acceptedBanner, { backgroundColor: Colors.error + '15' }]}>
+                    <Text style={[styles.acceptedText, { color: Colors.error }]}>Declined</Text>
+                  </View>
+                ) : (
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      onPress={() => handleReject(bid.id)}
+                      disabled={!!acceptedId}
+                    >
+                      <Text style={styles.rejectBtnText}>✗ Decline</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.acceptBtn, !!acceptedId && { opacity: 0.4 }]}
+                      onPress={() => handleAccept(bid)}
+                      disabled={!!acceptedId}
+                    >
+                      <Text style={styles.acceptBtnText}>✓ Accept — ₹{bid.amount}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
       </ScrollView>
     </View>
   );
@@ -187,39 +194,30 @@ const styles = StyleSheet.create({
   },
   fairPriceText: { fontSize: FontSize.sm, color: Colors.textSecondary, flex: 1 },
   fairPriceRange: { fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 10 },
+  emptyText: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textSecondary },
+  emptySub: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center' },
   offerCard: {
     backgroundColor: Colors.surfaceElevated, borderRadius: BorderRadius.lg,
     padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm,
+    marginBottom: Spacing.md,
   },
   offerCardAccepted: { borderColor: Colors.success + '70', backgroundColor: Colors.success + '08' },
   offerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
   vehicleInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   vehicleEmoji: { fontSize: 28 },
-  vehicleType: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  vehicleCapacity: { fontSize: FontSize.xs, color: Colors.textMuted },
+  driverName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  vehicleType: { fontSize: FontSize.xs, color: Colors.textMuted },
   ratingContainer: { alignItems: 'flex-end' },
   ratingValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   ratingTrips: { fontSize: FontSize.xs, color: Colors.textMuted },
-  reliabilityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.md },
-  reliabilityLabel: { fontSize: FontSize.xs, color: Colors.textMuted, width: 65 },
-  reliabilityBar: { flex: 1, height: 6, backgroundColor: Colors.surfaceBorder, borderRadius: 3, overflow: 'hidden' },
-  reliabilityFill: { height: '100%', backgroundColor: Colors.success, borderRadius: 3 },
-  reliabilityScore: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.success, width: 30, textAlign: 'right' },
-  bundleBox: {
-    backgroundColor: Colors.primary + '15', borderRadius: BorderRadius.md,
-    padding: Spacing.md, marginBottom: Spacing.md,
-    borderWidth: 1, borderColor: Colors.primary + '30',
-  },
-  bundleTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary, marginBottom: 4 },
-  bundleItem: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.sm },
+  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.md },
   fareLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
   fareValue: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.accent },
   fareWarning: { fontSize: FontSize.xs, color: Colors.warning },
   fareGood: { fontSize: FontSize.xs, color: Colors.success },
   etaLabel: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'right' },
   etaValue: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textPrimary, textAlign: 'right' },
-  explanation: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: Spacing.md, fontStyle: 'italic' },
   actions: { flexDirection: 'row', gap: Spacing.md },
   rejectBtn: {
     flex: 1, height: 46, justifyContent: 'center', alignItems: 'center',

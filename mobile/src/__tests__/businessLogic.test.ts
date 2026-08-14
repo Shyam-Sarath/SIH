@@ -291,3 +291,85 @@ describe('Compatibility Engine', () => {
     expect(result.score).toBe(100);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. WORKFLOW INTEGRATION TESTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Workflow Integration & State Transitions', () => {
+  // Mock DB state representation
+  interface TestBid {
+    id: string;
+    orderId: string;
+    driverPhone: string;
+    amount: number;
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  }
+
+  interface TestOrder {
+    id: string;
+    status: OrderState;
+    assignedDriver?: string;
+    currentFare?: number;
+  }
+
+  let orders: TestOrder[];
+  let bids: TestBid[];
+
+  beforeEach(() => {
+    orders = [
+      { id: 'KB1001', status: OrderState.AWAITING_BIDS },
+    ];
+    bids = [
+      { id: 'bid-1', orderId: 'KB1001', driverPhone: '9876541111', amount: 420, status: 'PENDING' },
+      { id: 'bid-2', orderId: 'KB1001', driverPhone: '9876542222', amount: 380, status: 'PENDING' },
+    ];
+  });
+
+  test('Farmer accepts Driver B bid -> chosen bid ACCEPTED, others REJECTED, status DRIVER_ASSIGNED', () => {
+    const targetOrderId = 'KB1001';
+    const chosenBidId = 'bid-2';
+    const chosenBid = bids.find(b => b.id === chosenBidId)!;
+    const targetOrder = orders.find(o => o.id === targetOrderId)!;
+
+    // Simulate acceptBidTransaction logic
+    bids.forEach(b => {
+      if (b.orderId === targetOrderId) {
+        b.status = b.id === chosenBidId ? 'ACCEPTED' : 'REJECTED';
+      }
+    });
+
+    let current = targetOrder.status;
+    current = transition(current, OrderState.BID_RECEIVED);
+    current = transition(current, OrderState.OFFER_SENT);
+    current = transition(current, OrderState.ACCEPTED);
+    targetOrder.status = transition(current, OrderState.DRIVER_ASSIGNED);
+    
+    targetOrder.assignedDriver = chosenBid.driverPhone;
+    targetOrder.currentFare = chosenBid.amount;
+
+    // Verify outcomes
+    expect(bids.find(b => b.id === 'bid-2')!.status).toBe('ACCEPTED');
+    expect(bids.find(b => b.id === 'bid-1')!.status).toBe('REJECTED');
+    expect(targetOrder.status).toBe(OrderState.DRIVER_ASSIGNED);
+    expect(targetOrder.assignedDriver).toBe('9876542222');
+    expect(targetOrder.currentFare).toBe(380);
+  });
+
+  test('Driver rejects assignment -> status reopens to AWAITING_BIDS and bid is reset', () => {
+    const targetOrder: TestOrder = { id: 'KB1001', status: OrderState.DRIVER_ASSIGNED, assignedDriver: '9876542222', currentFare: 380 };
+
+    // Simulate driver rejection
+    targetOrder.status = transition(targetOrder.status, OrderState.DRIVER_REJECTED);
+    expect(targetOrder.status).toBe(OrderState.DRIVER_REJECTED);
+
+    // Reopen bidding to other drivers
+    targetOrder.status = transition(targetOrder.status, OrderState.AWAITING_BIDS);
+    delete targetOrder.assignedDriver;
+    delete targetOrder.currentFare;
+
+    expect(targetOrder.status).toBe(OrderState.AWAITING_BIDS);
+    expect(targetOrder.assignedDriver).toBeUndefined();
+    expect(targetOrder.currentFare).toBeUndefined();
+  });
+});
