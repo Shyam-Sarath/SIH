@@ -9,20 +9,17 @@ import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '../
 import { useAuth } from '../../store/AuthContext';
 import { Order } from '../../types';
 
-// Mock AI extraction — replace with Groq API call
-const mockExtractOrder = (text: string) => ({
-  crop: 'Tomato',
-  quantityKg: 25,
-  pickupLocation: 'Village Kurichi',
-  destination: 'Koyambedu Market, Chennai',
-  preferredDate: 'Tomorrow',
-  aiConfidence: Math.random() > 0.3 ? 94 : 42,
-});
+// Real AI extraction using Groq
+import { extractOrderFromText } from '../../services/groqService';
+import { createOrder } from '../../services/dbService';
+import { OrderState } from '../../utils/orderStateMachine';
+import { useTranslation } from 'react-i18next';
 
 const CROPS = ['Tomato', 'Onion', 'Potato', 'Brinjal', 'Banana', 'Mango', 'Coconut', 'Chilli', 'Carrot', 'Cabbage'];
 
 export default function FarmerHomeScreen() {
-  const { userName } = useAuth();
+  const { t } = useTranslation();
+  const { userName, userPhone, language } = useAuth();
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const [orderText, setOrderText] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -49,44 +46,76 @@ export default function FarmerHomeScreen() {
     if (isListening) {
       setIsListening(false);
       stopPulse();
-      // Simulate voice result
-      setOrderText('என்கிட்ட 25 கிலோ தக்காளி இருக்கு, நாளைக்கு கோயம்பேடு மார்க்கெட்டுக்கு அனுப்பணும்');
-      handleAnalyze('voice input');
+      // Tamil voice template for testing speech input
+      const testSpeech = 'என்கிட்ட 25 கிலோ தக்காளி இருக்கு, நாளைக்கு கோயம்பேடு மார்க்கெட்டுக்கு அனுப்பணும்';
+      setOrderText(testSpeech);
+      handleAnalyze(testSpeech);
     } else {
       setIsListening(true);
       startPulse();
       setTimeout(() => {
         setIsListening(false);
         stopPulse();
-        setOrderText('என்கிட்ட 25 கிலோ தக்காளி இருக்கு, நாளைக்கு கோயம்பேடு மார்க்கெட்டுக்கு அனுப்பணும்');
-        handleAnalyze('voice input');
+        const testSpeech = 'என்கிட்ட 25 கிலோ தக்காளி இருக்கு, நாளைக்கு கோயம்பேடு மார்க்கெட்டுக்கு அனுப்பணும்';
+        setOrderText(testSpeech);
+        handleAnalyze(testSpeech);
       }, 3000);
     }
   };
 
-  const handleAnalyze = (text: string) => {
+  const handleAnalyze = async (text: string) => {
+    if (!text.trim()) return;
     setLoading(true);
-    setTimeout(() => {
-      const extracted = mockExtractOrder(text);
+    try {
+      const extracted = await extractOrderFromText(text);
       setPreviewOrder(extracted);
+    } catch (e: any) {
+      Alert.alert('AI Error', e.message || 'Could not parse text. Please try again.');
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     if (!previewOrder) return;
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setSubmitted(true);
+    try {
+      // Determine initial state based on AI confidence score
+      // If confidence < 60%, goes to ADMIN_REVIEW. Else goes directly to AWAITING_BIDS
+      const initialState = previewOrder.confidence >= 60
+        ? OrderState.AWAITING_BIDS
+        : OrderState.ADMIN_REVIEW;
+
+      // Offer dynamic fair pricing offer (default to ₹380 for demo)
+      const mockFare = 380;
+
+      await createOrder({
+        farmerPhone: userPhone || '9876543210',
+        crop: previewOrder.crop,
+        quantity: previewOrder.quantityKg,
+        destination: previewOrder.destination,
+        status: initialState,
+        fareOffer: mockFare,
+        rawTranscript: orderText || 'Direct manual entry',
+        confidence: previewOrder.confidence,
+      });
+
       setPreviewOrder(null);
       setOrderText('');
+      setSubmitted(true);
+
       Alert.alert(
-        '✅ Order Placed!',
-        `Your order for ${previewOrder.quantityKg} kg ${previewOrder.crop} has been submitted.\n\nDrivers will be notified shortly.`,
+        t('home.confirmOrder'),
+        initialState === OrderState.ADMIN_REVIEW
+          ? t('adminReview', { orderId: 'KB-Review' })
+          : t('orderCreated', { orderId: 'New' }),
         [{ text: 'OK', onPress: () => setSubmitted(false) }]
       );
-    }, 1000);
+    } catch (e: any) {
+      Alert.alert('Database Error', 'Failed to save order to Supabase. Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getConfidenceBadge = (confidence: number) => {
@@ -197,24 +226,23 @@ export default function FarmerHomeScreen() {
           <View style={styles.previewCard}>
             <View style={styles.previewHeader}>
               <Text style={styles.previewTitle}>🤖 AI Understood This</Text>
-              <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceBadge(previewOrder.aiConfidence).bg }]}>
-                <Text style={[styles.confidenceText, { color: getConfidenceBadge(previewOrder.aiConfidence).color }]}>
-                  {previewOrder.aiConfidence}% confidence
+              <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceBadge(previewOrder.confidence).bg }]}>
+                <Text style={[styles.confidenceText, { color: getConfidenceBadge(previewOrder.confidence).color }]}>
+                  {previewOrder.confidence}% confidence
                 </Text>
               </View>
             </View>
 
             <View style={styles.previewStatusBadge}>
-              <Text style={styles.previewStatusText}>{getConfidenceBadge(previewOrder.aiConfidence).label}</Text>
+              <Text style={styles.previewStatusText}>{getConfidenceBadge(previewOrder.confidence).label}</Text>
             </View>
 
             <View style={styles.previewFields}>
               {[
                 { icon: '🌿', label: 'Crop', value: previewOrder.crop },
                 { icon: '⚖️', label: 'Quantity', value: `${previewOrder.quantityKg} kg` },
-                { icon: '📍', label: 'Pickup', value: previewOrder.pickupLocation },
                 { icon: '🏪', label: 'Market', value: previewOrder.destination },
-                { icon: '📅', label: 'Date', value: previewOrder.preferredDate },
+                { icon: '💡', label: 'AI Explanation', value: previewOrder.explanation },
               ].map(f => (
                 <View key={f.label} style={styles.previewRow}>
                   <Text style={styles.previewIcon}>{f.icon}</Text>

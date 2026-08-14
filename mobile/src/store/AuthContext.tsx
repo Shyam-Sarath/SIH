@@ -65,6 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (userId: string, name: string, phone: string, role: UserRole, lang: Language = 'en') => {
+    // 1. Sync to Supabase
+    try {
+      const { upsertUserProfile } = require('../services/dbService');
+      await upsertUserProfile({ phone, name, role, language: lang });
+    } catch (e) {
+      console.warn('Supabase profile sync failed:', e);
+    }
+
     await Promise.all([
       AsyncStorage.setItem('userId', userId),
       AsyncStorage.setItem('userName', name),
@@ -72,6 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       AsyncStorage.setItem('userRole', role),
       AsyncStorage.setItem('language', lang),
     ]);
+
+    // Apply language dynamically to app i18n
+    try {
+      const { setAppLanguage } = require('../i18n');
+      setAppLanguage(lang);
+    } catch {}
+
     setState({
       isLoading: false,
       isAuthenticated: true,
@@ -97,7 +112,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const setLanguage = async (lang: Language) => {
+    // 1. Sync to Supabase
+    if (state.userPhone && state.userName && state.userRole) {
+      try {
+        const { upsertUserProfile } = require('../services/dbService');
+        await upsertUserProfile({
+          phone: state.userPhone,
+          name: state.userName,
+          role: state.userRole,
+          language: lang,
+        });
+      } catch (e) {
+        console.warn('Supabase language sync failed:', e);
+      }
+    }
+
     await AsyncStorage.setItem('language', lang);
+
+    // Apply language dynamically to app i18n
+    try {
+      const { setAppLanguage } = require('../i18n');
+      setAppLanguage(lang);
+    } catch {}
+
     setState(s => ({ ...s, language: lang }));
   };
 

@@ -109,7 +109,7 @@ function getLocalizedContent(
   const currentLang = i18n.language;
   i18n.changeLanguage(lang);
 
-  const body = i18n.t(key, params as any);
+  const body = i18n.t(key, params as any) as string;
 
   // Restore language (UI language may differ from notification language)
   i18n.changeLanguage(currentLang);

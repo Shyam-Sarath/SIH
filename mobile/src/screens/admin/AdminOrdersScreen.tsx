@@ -287,30 +287,88 @@ function OverrideModal({ order, onClose, onAction }: OverrideModalProps) {
   );
 }
 
+import { useEffect } from 'react';
+import { fetchAllOrdersAdmin, updateOrderStatusAdmin } from '../../services/dbService';
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function AdminOrdersScreen() {
-  const [orders, setOrders] = useState<MockOrder[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [selectedOrder, setSelectedOrder] = useState<MockOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
-  const handleAction = (orderId: string, action: string, data?: any) => {
-    setOrders(prev => prev.map(o => {
-      if (o.id !== orderId) return o;
-      switch (action) {
-        case 'APPROVE':      return { ...o, state: OrderState.AWAITING_BIDS };
-        case 'REJECT':       return { ...o, state: OrderState.CANCELLED };
-        case 'CANCEL':       return { ...o, state: OrderState.CANCELLED };
-        case 'SELECT_DRIVER':
-        case 'FORCE_ASSIGN': return { ...o, state: OrderState.DRIVER_ASSIGNED, assignedDriver: data?.driverId, currentFare: data?.fare };
-        case 'CANCEL_BIDDING': return { ...o, state: OrderState.CANCELLED };
-        case 'REOPEN_BIDDING': return { ...o, state: OrderState.AWAITING_BIDS };
-        case 'CHANGE_FARE':  return { ...o, currentFare: data?.fare };
-        default:             return o;
-      }
-    }));
-    Alert.alert('✅ Done', `Action "${action}" applied to Order #${orderId}.`);
+  useEffect(() => {
+    loadAllOrders();
+  }, []);
+
+  const loadAllOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchAllOrdersAdmin();
+      // Map data fields to match UI keys
+      const formatted = (data || []).map((o: any) => ({
+        id: o.id,
+        farmer: o.farmer_name || 'Farmer',
+        phone: o.farmer_phone || '9876543210',
+        crop: o.crop,
+        qty: o.quantity,
+        destination: o.destination,
+        date: o.date || 'Today',
+        state: o.status,
+        confidence: o.confidence || 100,
+        transcript: o.raw_transcript,
+        bids: o.bids || [],
+        currentFare: o.current_fare || o.fare_offer,
+        assignedDriver: o.assigned_driver,
+      }));
+      setOrders(formatted);
+    } catch (e) {
+      console.warn('Failed to load admin orders:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAction = async (orderId: string, action: string, data?: any) => {
+    let newState = OrderState.ADMIN_REVIEW;
+    let extraParams: any = {};
+
+    switch (action) {
+      case 'APPROVE':
+        newState = OrderState.AWAITING_BIDS;
+        break;
+      case 'REJECT':
+      case 'CANCEL':
+      case 'CANCEL_BIDDING':
+        newState = OrderState.CANCELLED;
+        break;
+      case 'SELECT_DRIVER':
+      case 'FORCE_ASSIGN':
+        newState = OrderState.DRIVER_ASSIGNED;
+        extraParams = { assigned_driver: data?.driverId, current_fare: data?.fare };
+        break;
+      case 'REOPEN_BIDDING':
+        newState = OrderState.AWAITING_BIDS;
+        break;
+      case 'CHANGE_FARE':
+        // Modify fare without modifying status directly
+        const target = orders.find(o => o.id === orderId);
+        newState = target ? target.state : OrderState.AWAITING_BIDS;
+        extraParams = { current_fare: data?.fare };
+        break;
+      default:
+        return;
+    }
+
+    try {
+      await updateOrderStatusAdmin(orderId, newState, extraParams);
+      await loadAllOrders(); // reload list
+      Alert.alert('✅ Done', `Action "${action}" applied successfully.`);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update order status.');
+    }
   };
 
   const filtered = orders.filter(o => {
@@ -383,7 +441,7 @@ export default function AdminOrdersScreen() {
                   <Text style={styles.orderDate}>{o.date}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: color + '20' }]}>
-                  <Text style={[styles.statusText, { color }]}>{STATE_LABELS[o.state]}</Text>
+                  <Text style={[styles.statusText, { color }]}>{STATE_LABELS[o.state as OrderState]}</Text>
                 </View>
               </View>
 

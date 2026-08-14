@@ -1,71 +1,27 @@
 // Farmer Orders Screen — status timeline
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '../../theme';
-import { OrderStatus } from '../../types';
-
-const MOCK_ORDERS = [
-  {
-    id: 'KB1024',
-    crop: 'Tomato',
-    quantity: 25,
-    destination: 'Koyambedu Market',
-    status: 'BIDDING' as OrderStatus,
-    date: '14 Aug 2026',
-    fareOffer: 380,
-  },
-  {
-    id: 'KB1021',
-    crop: 'Onion',
-    quantity: 50,
-    destination: 'Koyambedu Market',
-    status: 'IN_TRANSIT' as OrderStatus,
-    date: '13 Aug 2026',
-    fareOffer: 520,
-  },
-  {
-    id: 'KB1018',
-    crop: 'Potato',
-    quantity: 40,
-    destination: 'Broadway Market',
-    status: 'COMPLETED' as OrderStatus,
-    date: '11 Aug 2026',
-    fareOffer: 450,
-  },
-];
-
-const STATUS_STEPS: OrderStatus[] = [
-  'PLACED', 'VALIDATED', 'BUNDLING', 'BIDDING',
-  'ACCEPTED', 'DRIVER_ASSIGNED', 'PICKUP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED',
-];
-
-const STATUS_LABELS: Record<string, string> = {
-  PLACED: 'Order Placed',
-  VALIDATED: 'AI Validated',
-  BUNDLING: 'Bundling',
-  BIDDING: 'Drivers Bidding',
-  OFFER_RECEIVED: 'Offer Received',
-  ACCEPTED: 'Offer Accepted',
-  DRIVER_ASSIGNED: 'Driver Assigned',
-  PICKUP: 'Pickup Done',
-  IN_TRANSIT: 'In Transit',
-  DELIVERED: 'Delivered',
-  COMPLETED: 'Completed',
-};
+import { useAuth } from '../../store/AuthContext';
+import { fetchFarmerOrders } from '../../services/dbService';
+import { OrderState, HAPPY_PATH, STATE_LABELS } from '../../utils/orderStateMachine';
 
 const STATUS_COLOR: Record<string, string> = {
-  PLACED: Colors.info,
-  VALIDATED: Colors.success,
-  BUNDLING: Colors.primaryLight,
-  BIDDING: Colors.accent,
-  OFFER_RECEIVED: Colors.accent,
+  ADMIN_REVIEW: Colors.error,
+  AI_LOW_CONFIDENCE: Colors.error,
+  CREATED: Colors.info,
+  PROCESSING: Colors.info,
+  AWAITING_BIDS: Colors.accent,
+  BID_RECEIVED: Colors.accent,
+  OFFER_SENT: Colors.accent,
   ACCEPTED: Colors.success,
   DRIVER_ASSIGNED: Colors.success,
   PICKUP: Colors.driverColor,
   IN_TRANSIT: Colors.driverColor,
   DELIVERED: Colors.success,
   COMPLETED: Colors.success,
+  CANCELLED: Colors.textMuted,
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -73,72 +29,98 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <View style={[styles.statusBadge, { backgroundColor: color + '22', borderColor: color + '50' }]}>
       <View style={[styles.statusDot, { backgroundColor: color }]} />
-      <Text style={[styles.statusText, { color }]}>{STATUS_LABELS[status] || status}</Text>
+      <Text style={[styles.statusText, { color }]}>{STATE_LABELS[status as OrderState] || status}</Text>
     </View>
   );
 }
 
 export default function FarmerOrdersScreen() {
+  const { userPhone } = useAuth();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadOrders();
+  }, [userPhone]);
+
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchFarmerOrders(userPhone || '9876543210');
+      setOrders(data || []);
+    } catch (e) {
+      console.warn('Failed to load orders:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>📦 My Orders</Text>
-        <Text style={styles.headerSub}>{MOCK_ORDERS.length} orders</Text>
+        <Text style={styles.headerSub}>{orders.length} orders</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {MOCK_ORDERS.map(order => (
-          <View key={order.id} style={styles.orderCard}>
-            <View style={styles.cardTop}>
-              <View>
-                <Text style={styles.orderId}>#{order.id}</Text>
-                <Text style={styles.orderDate}>{order.date}</Text>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.farmerColor} />
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {orders.map(order => (
+            <View key={order.id} style={styles.orderCard}>
+              <View style={styles.cardTop}>
+                <View>
+                  <Text style={styles.orderId}>#{order.id}</Text>
+                  <Text style={styles.orderDate}>{order.date || 'Today'}</Text>
+                </View>
+                <StatusBadge status={order.status} />
               </View>
-              <StatusBadge status={order.status} />
-            </View>
 
-            <View style={styles.cardBody}>
-              <View style={styles.cropRow}>
-                <Text style={styles.cropEmoji}>🌿</Text>
-                <Text style={styles.cropName}>{order.crop}</Text>
-                <Text style={styles.cropQty}>{order.quantity} kg</Text>
+              <View style={styles.cardBody}>
+                <View style={styles.cropRow}>
+                  <Text style={styles.cropEmoji}>🌿</Text>
+                  <Text style={styles.cropName}>{order.crop}</Text>
+                  <Text style={styles.cropQty}>{order.quantity} kg</Text>
+                </View>
+                <View style={styles.destRow}>
+                  <Ionicons name="location" size={16} color={Colors.textMuted} />
+                  <Text style={styles.destText}>{order.destination}</Text>
+                </View>
               </View>
-              <View style={styles.destRow}>
-                <Ionicons name="location" size={16} color={Colors.textMuted} />
-                <Text style={styles.destText}>{order.destination}</Text>
-              </View>
-            </View>
 
-            <View style={styles.cardFooter}>
-              <View style={styles.fareContainer}>
-                <Text style={styles.fareLabel}>Fare</Text>
-                <Text style={styles.fareValue}>₹{order.fareOffer}</Text>
+              <View style={styles.cardFooter}>
+                <View style={styles.fareContainer}>
+                  <Text style={styles.fareLabel}>Fare</Text>
+                  <Text style={styles.fareValue}>₹{order.fare_offer || order.fareOffer || 380}</Text>
+                </View>
+                {order.status === OrderState.BID_RECEIVED && (
+                  <TouchableOpacity style={styles.viewOffersBtn}>
+                    <Text style={styles.viewOffersBtnText}>View Offers</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.farmerColor} />
+                  </TouchableOpacity>
+                )}
               </View>
-              {order.status === 'BIDDING' && (
-                <TouchableOpacity style={styles.viewOffersBtn}>
-                  <Text style={styles.viewOffersBtnText}>View Offers</Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.farmerColor} />
-                </TouchableOpacity>
-              )}
-            </View>
 
-            {/* Timeline */}
-            <View style={styles.timeline}>
-              {STATUS_STEPS.slice(0, 6).map((step, i) => {
-                const currentIdx = STATUS_STEPS.indexOf(order.status);
-                const isDone = i <= currentIdx;
-                return (
-                  <View key={step} style={styles.timelineStep}>
-                    <View style={[styles.timelineDot, isDone && styles.timelineDotDone]} />
-                    {i < 5 && <View style={[styles.timelineLine, isDone && i < currentIdx && styles.timelineLineDone]} />}
-                  </View>
-                );
-              })}
+              {/* Timeline display using HAPPY_PATH states */}
+              <View style={styles.timeline}>
+                {HAPPY_PATH.slice(0, 6).map((step, i) => {
+                  const currentIdx = HAPPY_PATH.indexOf(order.status as OrderState);
+                  const isDone = i <= currentIdx;
+                  return (
+                    <View key={step} style={styles.timelineStep}>
+                      <View style={[styles.timelineDot, isDone && styles.timelineDotDone]} />
+                      {i < 5 && <View style={[styles.timelineLine, isDone && i < currentIdx && styles.timelineLineDone]} />}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        ))}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
