@@ -1,0 +1,44 @@
+{
+  "orderCreated": "Your order has been placed! Order #{{orderId}}",
+  "orderProcessing": "AI is processing your order...",
+  "awaitingBids": "Looking for drivers near you for {{crop}} ({{quantity}} kg)",
+  "bidReceived": "Great news! Drivers are bidding for your order.",
+  "offerReceived": "You have a delivery offer! Fare: ₹{{fare}} by {{vehicleType}}. Estimated pickup: {{eta}}",
+  "orderAccepted": "✅ Order confirmed! Driver has been assigned.",
+  "driverAssigned": "Driver {{driverName}} will pick up your {{crop}}. Expected: {{eta}}",
+  "pickupDone": "Your {{crop}} ({{quantity}} kg) has been picked up by the driver.",
+  "inTransit": "Your produce is on the way to {{destination}}!",
+  "delivered": "🎉 Your {{crop}} has been delivered to {{destination}}!",
+  "completed": "Order #{{orderId}} is complete. Thank you for using KrishiBundle!",
+  "cancelled": "Your order #{{orderId}} has been cancelled.",
+  "driverRejected": "The driver could not fulfil your order. Finding a new driver...",
+  "adminReview": "Your order is being reviewed by our team. We'll confirm shortly.",
+  "paymentFailed": "There was an issue with payment for order #{{orderId}}. Please contact support.",
+
+  "compatibilityOk": "Your {{crop1}} and {{crop2}} can be transported together safely.",
+  "compatibilityWarning": "⚠️ {{crop1}} and {{crop2}} can travel together with precautions: {{reason}}",
+  "compatibilityFail": "❌ {{crop1}} and {{crop2}} cannot be transported together. {{reason}}",
+
+  "tabs": {
+    "home": "Home",
+    "myOrders": "My Orders",
+    "offers": "Offers",
+    "profile": "Profile"
+  },
+  "home": {
+    "greeting": "Good Morning",
+    "newOrder": "Place New Order",
+    "type": "Type",
+    "voice": "Voice",
+    "voiceHint": "Tap to speak your order",
+    "voiceLangHint": "You can speak in Tamil, Telugu, Malayalam, Hindi or English",
+    "analyzeOrder": "AI Analyze Order",
+    "analyzing": "Analyzing...",
+    "confirmOrder": "Confirm Order",
+    "submitOrder": "Submit Order",
+    "aiUnderstood": "AI Understood This",
+    "confidence": "confidence",
+    "autoProcessed": "✅ Auto-processed",
+    "sentForReview": "⚠️ Sent for review"
+  }
+}

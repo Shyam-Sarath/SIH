@@ -1,0 +1,43 @@
+{
+  "orderCreated": "आपका ऑर्डर दर्ज हो गया! ऑर्डर #{{orderId}}",
+  "orderProcessing": "AI आपके ऑर्डर को प्रोसेस कर रहा है...",
+  "awaitingBids": "{{crop}} ({{quantity}} किलो) के लिए आपके पास वाहन खोज रहे हैं",
+  "bidReceived": "अच्छी खबर! ड्राइवर आपके ऑर्डर पर बोली लगा रहे हैं।",
+  "offerReceived": "डिलीवरी ऑफर मिला! किराया: ₹{{fare}}, वाहन: {{vehicleType}}। अनुमानित पिकअप: {{eta}}",
+  "orderAccepted": "✅ ऑर्डर कन्फर्म हुआ! ड्राइवर नियुक्त कर दिया गया।",
+  "driverAssigned": "ड्राइवर {{driverName}} आपका {{crop}} ले जाएंगे। अनुमानित: {{eta}}",
+  "pickupDone": "आपका {{crop}} ({{quantity}} किलो) ड्राइवर ने उठा लिया।",
+  "inTransit": "आपकी फसल {{destination}} के रास्ते पर है!",
+  "delivered": "🎉 आपका {{crop}} {{destination}} में डिलीवर हो गया!",
+  "completed": "ऑर्डर #{{orderId}} पूरा हो गया। KrishiBundle उपयोग करने के लिए धन्यवाद!",
+  "cancelled": "आपका ऑर्डर #{{orderId}} रद्द कर दिया गया।",
+  "driverRejected": "ड्राइवर आपका ऑर्डर पूरा नहीं कर सके। नया ड्राइवर ढूंढ रहे हैं...",
+  "adminReview": "हमारी टीम आपके ऑर्डर की समीक्षा कर रही है। जल्द ही पुष्टि करेंगे।",
+  "paymentFailed": "ऑर्डर #{{orderId}} के भुगतान में समस्या। सहायता से संपर्क करें।",
+
+  "compatibilityOk": "आपका {{crop1}} और {{crop2}} सुरक्षित रूप से साथ ले जाया जा सकता है।",
+  "compatibilityWarning": "⚠️ {{crop1}} और {{crop2}} सावधानी के साथ साथ जा सकते हैं: {{reason}}",
+  "compatibilityFail": "❌ {{crop1}} और {{crop2}} को साथ नहीं ले जाया जा सकता। {{reason}}",
+
+  "tabs": {
+    "home": "होम",
+    "myOrders": "मेरे ऑर्डर",
+    "offers": "ऑफर",
+    "profile": "प्रोफाइल"
+  },
+  "home": {
+    "greeting": "सुप्रभात",
+    "newOrder": "नया ऑर्डर दें",
+    "type": "टाइप",
+    "voice": "आवाज़",
+    "voiceHint": "अपना ऑर्डर बोलें",
+    "voiceLangHint": "हिंदी, तमिल, तेलुगु, मलयालम या अंग्रेजी में बोल सकते हैं",
+    "analyzeOrder": "AI ऑर्डर विश्लेषण",
+    "analyzing": "विश्लेषण हो रहा है...",
+    "confirmOrder": "ऑर्डर कन्फर्म करें",
+    "aiUnderstood": "AI ने समझा",
+    "confidence": "विश्वसनीयता",
+    "autoProcessed": "✅ स्वचालित रूप से प्रोसेस हुआ",
+    "sentForReview": "⚠️ समीक्षा के लिए भेजा गया"
+  }
+}

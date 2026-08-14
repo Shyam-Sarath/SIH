@@ -37,8 +37,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run tests
-        run: npm test -- --passWithNoTests --runInBand
+      - name: Run business logic tests
+        run: npm test -- --runInBand --forceExit
 
       - name: Expo Doctor
         run: npx expo-doctor
